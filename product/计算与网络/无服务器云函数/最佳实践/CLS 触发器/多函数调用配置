@@ -1,0 +1,150 @@
+目前，CLS 触发器一个 Topic 下只支持绑定单个函数触发，可以通过该文档配置实现单日志 Topic 多个函数并行触发操作。CLS 触发处理为异步过程，您需要新建一个路由函数来将CLS触发器数据同步调度并触发至其他函数。
+
+## 快速开始
+
+需准备在同一地域下的多个函数资源，其中确定一个函数为路由函数，其余函数为数据处理函数。路由函数应绑定 CLS 触发器。其余函数为具体处理数据函数。
+
+![](https://main.qcloudimg.com/raw/a5dfc1d79a23c0f6de5115ee7697a590.svg)
+
+### 路由函数配置
+
+在函数控制台创建一个被调用的 Python 云函数，地域为【广州】，命名为 “FuncRouter”。函数内容如下：
+
+```
+def main_handler(event, context):
+    data = base64.b64decode(event['clslogs']['data'])
+    striodata = StringIO.StringIO(data)
+    with gzip.GzipFile(fileobj=striodata, mode='r') as f:
+        data = json.loads(f.read())
+	#获取日志数据到 data 字段
+    scf = Client(region="ap-guangzhou")
+    print("prepare to invoke a function!")
+    try:
+        data = scf.invoke('FuncInvoked',data={"logs": "data"})
+        # data = scf.FuncInvoked(data={"a": "b"}) #使用Python原生调用方式，需要首先通过Client进行初始化
+        print (data)
+    except TencentServerlessSDKException as e:
+        print (e)
+    except TencentCloudSDKException as e:
+        print (e)
+    except Exception as e:
+        print (e)
+    return "Already invoked a function!" # return
+```
+输出结果如下：
+
+```
+"Already invoked a function!"
+```
+更多函数间调用方式，请参考 [函数间调用文档](https://cloud.tencent.com/document/product/583/37102)
+
+### 处理函数配置
+
+在云端创建一个被调用的 Python 云函数，地域为【广州】，命名为 “FuncInvoked”。函数内容如下，该函数可自定义：
+
+```python
+# -*- coding: utf8 -*-
+def main_handler(event, context):
+    if 'key1' in event.keys():
+        print("value1 = " + event['key1'])
+    if 'key2' in event.keys():
+        print("value2 = " + event['key2'])
+    return "Hello World from the function being invoked"  #return
+```
+
+## 接口列表
+### API Reference
+- [Client](#client)（类）
+- [invoke](#invoke) （方法）
+- [TencentserverlessSDKException](#TencentserverlessSDKException) （类）
+
+#### Client
+**方法：**
+- **\_\_init__** 
+
+ **参数信息：**
+
+ <table>
+	<tr>
+	<th>参数名</th> <th>是否必填</th> <th>类型</th> <th>描述</th>
+	</tr>
+	<tr>
+	<td>region </td> 	<td>否</td> 	<td><code>String</code></td>
+		<td>地域信息，默认与调用接口的函数所属地域相同，本地调用默认是广州。</td>
+	</tr>
+	<tr>
+	<td>secret_id</td> 	<td>否</td> 	<td><code>String</code></td>
+		<td>用户 SecretId， 默认是从云函数环境变量中获取，<b>本地调试必填</b>。</td>
+	</tr>
+	<tr>
+	<td>secret_key</td> 	<td>否</td> 	<td><code>String</code></td>
+		<td>用户 SecretKey， 默认是从云函数环境变量中获取，<b>本地调试必填</b>。</td>
+	</tr>
+	<tr>
+		<td>token</td> 	<td>否</td> 	<td><code>String</code></td>
+		<td>用户 token，默认是从云函数环境变量中获取</td>
+	</tr>
+</table>
+
+
+- **invoke**
+
+ **参数信息：**
+
+ <table>
+	<tr>
+	<th>参数名</th> <th>是否必填</th> <th>类型</th> <th>描述</th>
+	</tr>
+	<tr>
+		<td>function_name</td> <td>是</td> <td><code>String</code></td> 
+		<td>函数名称。</td>
+	</tr>
+	<tr>
+		<td>qualifier</td> <td>否</td> <td><code>String</code></td>
+		<td>函数版本，默认为 $LATEST。</td>
+	</tr>
+	<tr>
+		<td>data</td> <td>否</td> <td><code>Object</code></td>
+		<td>函数运行入参，必须可以被 json.dumps 的对象。</td>
+	</tr>
+	<tr>
+		<td>namespace</td> <td>否</td> <td><code>String</code></td>
+		<td>命名空间，默认为 default。</td>
+	</tr>
+</table>
+
+
+#### invoke
+调用函数，暂时只支持同步调用。
+
+**参数信息：**
+
+| 参数名        | 是否必填 |  类型  |                    描述                                      |
+|---------|---------|---------|---------|
+| region        |    否    | `String` | 地域信息，默认与调用接口的函数所属地域相同，本地调用默认是广州。|
+| secret_id     |    否    | `String` | 用户 SecretId， 默认是从云函数环境变量中获取，**本地调试必填**。|
+| secret_key    |    否    | `String` | 用户 SecretKey， 默认是从云函数环境变量中获取，**本地调试必填**。|
+| token         |    否    | `String` | 用户 token，默认从云函数环境变量中获取。|
+| function_name |    是    | `String` | 函数名称。 |
+| qualifier     |    否    | `String` | 函数版本，默认为 $LATEST。 |
+| data          |    否    | `String` | 函数运行入参，必须可以被 json.dumps 的对象。 |
+| namespace     |    否    | `String` | 命名空间，默认为 default。 |
+
+<span id="TencentserverlessSDKException"></span>
+#### TencentserverlessSDKException
+**属性：**
+- [**code**]
+- [**message**]
+- [**request_id**]
+- [**response**]
+- [**stack_trace**]
+
+**方法及描述：**
+
+| 方法名 | 描述 |
+|---------|---------|
+| get_code | 返回错误码信息 |
+|get_message|返回错误信息|
+|get_request_id |返回 RequestId 信息 |
+|get_response | 返回 response 信息|
+| get_stack_trace |  返回 stack_trace 信息 |
